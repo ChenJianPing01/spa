@@ -1,12 +1,14 @@
 /* spa.js */
 
-var spa = (function () {
-    var initModule = function ($container) {
-        spa.shell.initModule($container);
-    }
+import { shell } from './spa.shell.js';
+export { spa };
 
-    return { initModule: initModule };
-}()); 
+function initModule($container) {
+    shell.initModule($container);
+}
 
+var spa = { initModule: initModule };
 
+// 启动模块
+$(function () { spa.initModule($('#spa')) });
 
