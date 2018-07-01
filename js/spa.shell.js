@@ -192,4 +192,4 @@ function initModule($container) {
     setTimeout(function () { toggleChat(false); }, 2000);
 }
 
-var shell = { initModule: initModule };
+const shell = { initModule: initModule };
