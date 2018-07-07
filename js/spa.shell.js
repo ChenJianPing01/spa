@@ -1,195 +1,167 @@
-/* spa.shell.js */
+/* shell模块 */
 
+import { util } from './spa.util.js';
+import { model } from './spa.model.js';
+import { Chat } from './spa.chat.js';
 export { shell };
- 
-let
-    // 配置变量
-    configMap = {
-        anchor_schema_map: {
-            chat: { open: true, closed: true }
-        },
-        main_html:
-            `<div class="spa-shell-head">
-                <div class="spa-shell-head-logo"></div>
-                <div class="spa-shell-head-acct"></div>
-                <div class="spa-shell-head-search"></div>
-            </div>
-            <div class="spa-shell-main">
-                <div class="spa-shell-main-nav"></div>
-                <div class="spa-shell-main-content"></div>
-            </div>
-            <div class="spa-shell-foot"></div>
-            <div class="spa-shell-chat"></div>
-            <div class="spa-shell-modal"></div>`,
-        chat_extend_time: 200,
-        chat_retract_time: 300,
-        chat_extend_height: 450,
-        chat_retract_height: 15,
-        chat_extended_title: '点击收起',
-        chat_retracted_title: '点击展开'
-    },
 
-    // 状态变量
-    stateMap = {
-        $container: null,
-        anchor_map: {},
-        is_chat_retracted: true
-    },
+class Shell {
 
-    // 缓存jQuery集合变量
-    jqueryMap = {};
+    constructor() {
+        this.config = {
+            anchor_schema: {
+                chat: { opened: true, closed: true }
+            },
+            main_html:
+                `<div class="spa-shell-head">
+                    <div class="spa-shell-head-logo"></div>
+                    <div class="spa-shell-head-acct"></div>
+                    <div class="spa-shell-head-search"></div>
+                </div>
+                <div class="spa-shell-main">
+                    <div class="spa-shell-main-nav"></div>
+                    <div class="spa-shell-main-content"></div>
+                </div>
+                <div class="spa-shell-foot"></div>
+                <div class="spa-shell-modal"></div>`,
+            
+            resize_interval: 1000
+        };
 
-// 设置缓存jQuery集合
-function setJqueryMap() {
-    let $container = stateMap.$container;
-    jqueryMap = {
-        $container: $container,
-        $chat: $container.find('.spa-shell-chat')
-    };
-}
-
-// 切换聊天组件状态
-function toggleChat(do_extend, callback) {
-    let
-        px_chat_ht = jqueryMap.$chat.height(),
-        is_open = px_chat_ht === configMap.chat_extend_height,
-        is_closed = px_chat_ht === configMap.chat_retract_height,
-        is_sliding = !is_open && !is_closed;
-
-    if (is_sliding) { return false; }
-
-    if (do_extend) {
-        jqueryMap.$chat.animate(
-            { height: configMap.chat_extend_height },
-            configMap.chat_extend_time,
-            function () {
-                jqueryMap.$chat.attr('title', configMap.chat_extended_title);
-                stateMap.is_chat_retracted = false;
-                if (callback) { callback(jqueryMap.$chat); }
-            }
-        );
-    } else {
-        jqueryMap.$chat.animate(
-            { height: configMap.chat_retract_height },
-            configMap.chat_retract_time,
-            function () {
-                jqueryMap.$chat.attr('title', configMap.chat_retracted_title);
-                stateMap.is_chat_retracted = true;
-                if (callback) { callback(jqueryMap.$chat); }
-            }
-        );
+        this.state = { 
+            $container: undefined,
+            anchor: {},
+            resize_idto: undefined
+        };
+        this.jqueryBuf = {}; // 缓存jQuery集合
     }
-    return true;
-}
 
-// 复制锚组件
-function copyAnchorMap() {
-    return $.extend(true, {}, stateMap.anchor_map);
-}
+    // 复制锚组件
+    copyAnchor() {
+        return $.extend(true, {}, this.state.anchor);
+    }
 
-// 改变锚组件部分内容
-function changeAnchorPart(arg_map) {
-    let anchor_map_revise = copyAnchorMap(),
-        bool_return = true,
-        //key_name, 
-        key_name_dep;
+    // 设置jQuery缓冲
+    setJqueryBuf() {
+        this.jqueryBuf = { $container: this.state.$container };
+    }
 
-    // 合并改变内容
-    for (let key_name in arg_map) {
-        if (arg_map.hasOwnProperty(key_name) && key_name.indexOf('_') !== 0) {
-            anchor_map_revise[key_name] = arg_map[key_name];
-            key_name_dep = '_' + key_name;
-            if (arg_map[key_name_dep]) {
-                anchor_map_revise[key_name_dep] = arg_map[key_name_dep];
-            } else {
-                delete anchor_map_revise[key_name_dep];
-                delete anchor_map_revise['_s' + key_name_dep];
+    // 改变锚组件部分内容
+    changeAnchorPart(arg_map) {
+        let anchor_revise = this.copyAnchor(),
+            bool_return = true,
+            key_name_dep;
+
+        // 合并改变内容
+        for (let key_name in arg_map) {
+            if (arg_map.hasOwnProperty(key_name) && key_name.indexOf('_') !== 0) {
+                anchor_revise[key_name] = arg_map[key_name];
+                key_name_dep = '_' + key_name;
+                if (arg_map[key_name_dep]) {
+                    anchor_revise[key_name_dep] = arg_map[key_name_dep];
+                } else {
+                    delete anchor_revise[key_name_dep];
+                    delete anchor_revise['_s' + key_name_dep];
+                }
             }
         }
+
+        // 设置锚组件
+        try { $.uriAnchor.setAnchor(anchor_revise); }
+        catch (error) {
+            $.uriAnchor.setAnchor(this.state.anchor, null, true);
+            bool_return = false;
+        }
+
+        return bool_return;
     }
 
-    // 设置锚组件
-    try {
-        $.uriAnchor.setAnchor(anchor_map_revise);
-    }
-    catch (error) {
-        $.uriAnchor.setAnchor(stateMap.anchor_map, null, true);
-        bool_return = false;
-    }
+    // 定义jQuery的hashchange事件处理程序
+    onHashchange(event) {
+        let anchor_proposed, _s_chat_previous,
+            _s_chat_proposed,
+            is_ok = true,
+            anchor_previous = this.copyAnchor();
 
-    return bool_return;
-}
+        // 读取锚并解析为一个映射
+        try { anchor_proposed = $.uriAnchor.makeAnchorMap(); }
+        catch (error) {
+            $.uriAnchor.setAnchor(anchor_previous, null, true);
+            return false;
+        }
+        this.state.anchor = anchor_proposed;
 
-// 定义jQuery的hashchange事件处理程序
-function onHashchange(event) {
-    let anchor_map_previous = copyAnchorMap(),
-        anchor_map_proposed,
-        _s_chat_previous, 
-        _s_chat_proposed,
-        s_chat_proposed;
+        _s_chat_previous = anchor_previous._s_chat;
+        _s_chat_proposed = anchor_proposed._s_chat;
 
-    // 读取锚并解析为一个映射
-    try {
-        anchor_map_proposed = $.uriAnchor.makeAnchorMap();
-    }
-    catch (error) {
-        $.uriAnchor.setAnchor(anchor_map_previous, null, true);
+        // 调整chat组件
+        if (!anchor_previous || _s_chat_previous !== _s_chat_proposed) {
+            let chat_proposed = anchor_proposed.chat;
+            switch (chat_proposed) {
+                case 'opened':
+                    is_ok = this.chat.setSliderPosition('opened');
+                    break;
+                case 'closed':
+                    is_ok = this.chat.setSliderPosition('closed');
+                    break;
+                default:
+                    this.chat.setSliderPosition('closed');
+                    delete anchor_proposed.chat;
+                    $.uriAnchor.setAnchor(anchor_proposed, null, true);
+            }
+        }
+        if (!is_ok) {
+            if (anchor_previous) {
+                $.uriAnchor.setAnchor(anchor_previous, null, true);
+                this.state.anchor = anchor_previous;
+            } else {
+                delete anchor_proposed.chat;
+                $.uriAnchor.setAnchor(anchor_proposed, null, true);
+            }
+        }
         return false;
     }
-    stateMap.anchor_map = anchor_map_proposed;
 
-    _s_chat_previous = anchor_map_previous._s_chat;
-    _s_chat_proposed = anchor_map_proposed._s_chat;
+    onResize() {
+        if (this.state.resize_idto) {return true;}
 
-    // 调整chat组件
-    if (!anchor_map_previous || _s_chat_previous !== _s_chat_proposed) {
-        s_chat_proposed = anchor_map_proposed.chat;
-        switch (s_chat_proposed) {
-            case 'open':
-                toggleChat(true);
-                break;
-            case 'closed':
-                toggleChat(false);
-                break;
-            default:
-                toggleChat(false);
-                delete anchor_map_proposed.chat;
-                $.uriAnchor.setAnchor(anchor_map_proposed, null, true);
-        }
+        this.chat.handleResize();
+        this.state.resize_idto = setTimeout(
+            () => this.state.resize_idto = undefined,
+            this.config.resize_interval
+        );
+        return true;
     }
-    return false;    
+
+    setChatAnchor(position_type) {
+        return this.changeAnchorPart({ chat: position_type });
+    }
+
+    // 初始化模块
+    initModule($container) {
+        // 载入文档内容
+        this.state.$container = $container;
+        $container.html(this.config.main_html);
+        this.setJqueryBuf();
+        // 配置uriAnchor插件
+        $.uriAnchor.configModule({ schema_map: this.config.anchor_schema });
+
+        // 配置和初始化chat模块
+        this.chat = new Chat();
+        this.chat.configModule({
+            shell: this,
+            chat_model: model.chat,
+            people_model: model.people
+        });
+        this.chat.initModule(this.jqueryBuf.$container);
+
+        // 绑定hashchange事件处理程序，并立即触发它
+        $(window)
+            .on('resize', this.onResize.bind(this))
+            .on('hashchange', this.onHashchange.bind(this))
+            .trigger('hashchange');
+    }
+
 }
 
-// 定义clickChat事件处理程序
-function onClickChat(event) {
-    // 仅修改锚组件的chat参数
-    changeAnchorPart({chat: (stateMap.is_chat_retracted ? 'open' : 'closed')});
-    return false;
-}
-
-// 初始化本模块
-function initModule($container) {
-    stateMap.$container = $container;
-    $container.html(configMap.main_html);
-    setJqueryMap();
-
-    stateMap.is_chat_retracted = true;
-    jqueryMap.$chat
-        .attr('title', configMap.chat_retracted_title)
-        .click(onClickChat);
-    stateMap.is_chat_retracted = false;
-
-    // 配置uriAnchor插件
-    $.uriAnchor.configModule({schema_map: configMap.anchor_schema_map});    
-
-    // 绑定hashchange事件处理程序，并立即触发它
-    $(window)
-        .bind('hashchange', onHashchange)
-        .trigger('hashchange');
-
-    // 测试toggleChat
-    setTimeout(function () { toggleChat(true); }, 1000);
-    setTimeout(function () { toggleChat(false); }, 2000);
-}
-
-const shell = { initModule: initModule };
+const shell = new Shell();
