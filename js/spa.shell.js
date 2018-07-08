@@ -25,7 +25,7 @@ class Shell {
                 <div class="spa-shell-foot"></div>
                 <div class="spa-shell-modal"></div>`,
             
-            resize_interval: 1000
+            resize_interval: 300
         };
 
         this.state = { 
@@ -43,7 +43,12 @@ class Shell {
 
     // 设置jQuery缓冲
     setJqueryBuf() {
-        this.jqueryBuf = { $container: this.state.$container };
+        let $container = this.state.$container;
+        this.jqueryBuf = {
+            $container: $container,
+            $acct: $container.find('.spa-shell-head-acct'),
+            $nav: $container.find('.spa-shell-main-nav')
+        };
     }
 
     // 改变锚组件部分内容
@@ -122,6 +127,7 @@ class Shell {
         return false;
     }
 
+    // 窗口尺寸调整事件处理
     onResize() {
         if (this.state.resize_idto) {return true;}
 
@@ -133,6 +139,32 @@ class Shell {
         return true;
     }
 
+    // 点击账户元素，处理登入或登出事件
+    onTapAcct(event) {
+        let acct_text, user_name,
+            user = model.people.user;
+
+        if (user.get_is_anon()) {
+            user_name = prompt('登录');
+            model.people.login(user_name);
+            this.jqueryBuf.$acct.text('处理中...');
+        } else {
+            model.people.logout();
+        }
+        return false;
+    }
+
+    // 登入事件处理
+    onLogin(event, login_user) {
+        this.jqueryBuf.$acct.text(login_user.name);
+    }
+
+    // 登出事件处理
+    onLogout(event, logout_user) {
+        this.jqueryBuf.$acct.text('登录');
+    }
+
+    // 设置chat的锚
     setChatAnchor(position_type) {
         return this.changeAnchorPart({ chat: position_type });
     }
@@ -160,6 +192,14 @@ class Shell {
             .on('resize', this.onResize.bind(this))
             .on('hashchange', this.onHashchange.bind(this))
             .trigger('hashchange');
+
+        // 订阅事件
+        $.gevent.subscribe($container, 'spa-login', this.onLogin.bind(this));
+        $.gevent.subscribe($container, 'spa-logout', this.onLogout.bind(this));
+        this.jqueryBuf.$acct
+            .text('登录')
+            .on('utap', this.onTapAcct.bind(this));
+
     }
 
 }

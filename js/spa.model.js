@@ -101,13 +101,17 @@ class People {
     login(name) {
         let sio = this.model.isFakeData ? fake.mockSio : data.getSio();
 
-        this.user = new Person({
-            cid: this.makeCid(),
-            css_map: { top: 25, left: 25, 'background-color': '#8f8' },
-            name: name
-        });
+        this.user = new Person(
+            this, {
+                cid: this.makeCid(),
+                css_map: { top: 25, left: 25, 'background-color': '#8f8' },
+                name: name
+            });
 
-        sio.on('userupdate', this.completeLogin);
+        // 注册：当后端发布'userupdate'消息时，完成登入过程的回调函数'completeLogin'
+        sio.on('userupdate', this.completeLogin.bind(this));
+
+        // 向后端发送'adduser'消息，携带用户信息 （这里，添加用户和登入是一回事，为什么？）
         sio.emit('adduser', {
             cid: this.user.cid,
             css_map: this.user.css_map,
@@ -117,7 +121,7 @@ class People {
 
     completeLogin(user_list) {
         let user = user_list[0];
-        
+
         delete this.cid_map[user.cid];
         this.user.cid = user.___id;
         this.user.id = user.___id;
@@ -142,21 +146,73 @@ class People {
 }
 
 
+class Chat {
+    constructor(model, people) {
+        this.model = model;
+        this.people = people;
+    }
+
+    _update_list(arg_list) {
+        //let person_list = arg_list[0];
+        this.people.clearPersonDb();
+        for (let person of arg_list[0]) {
+            if (!person.name) { continue; }
+            if (this.people.user && this.people.user.id === person.___id) {
+                this.people.user.css_map = person.css_map;
+                continue;
+            }
+            new Person(this.people, Person.makePersonMap(person));
+        }
+        this.people.person_db.sort('name');
+    }
+
+    _publish_listchange(arg_list) {
+        this._update_list(arg_list);
+        $.gevent.publish('spa-listchange', [arg_list]);
+    }
+
+    _leave() {
+        let sio = this.model.isFakeData ? fake.mockSio : data.getSio();
+        this.is_connected = false;
+        if (sio) {sio.emit('离开聊天室！');}
+    }
+
+    join() {
+        if (this.is_connected) {return false;}
+        if (this.people.user.get_is_anon()) {
+            console.warn('用户应先登录后，再进入聊天室！');
+            return false;
+        }
+
+        let sio = this.model.isFakeData ? fake.mockSio : data.getSio();
+        sio.on('listchange', this._publish_listchange.bind(this));
+        this.is_connected = true;
+        return true;
+    }
+}
+
+
 class Model {
 
     constructor() {
         this.isFakeData = true;
+        this.is_connected = false;
     }
 
     initModule() {
         this.people = new People(this);
         this.people.initAnonUser();
 
+        this.chat = new Chat(this, this.people);
+
+        /*
         if (this.isFakeData) {
             fake.getPersonList().forEach(
                 (person_s) => new Person(this.people, Person.makePersonMap(person_s))
             );
         }
+        */
+
     }
 
 }
